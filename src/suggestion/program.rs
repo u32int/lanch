@@ -1,21 +1,26 @@
-use iced::Element;
 use iced::widget::text;
+use iced::Element;
 use std::fmt::Display;
+
+use serde::{Deserialize, Serialize};
 
 use std::process::Command;
 
 use super::*;
 
 // I would use 'Application' but that is already taken by iced
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Program {
     name: String,
+    exec: String,
     // TODO: icon
 }
 
 impl Program {
-    pub fn with_name(name: &str) -> Self {
+    pub fn new(name: &str, exec: &str) -> Self {
         Program {
             name: String::from(name),
+            exec: String::from(exec),
         }
     }
 }
@@ -26,7 +31,11 @@ impl Suggestion for Program {
     }
 
     fn execute(&self) {
-        Command::new(&self.name).spawn().expect("failed to start command.");
+        Command::new("sh")
+            .arg("-c")
+            .arg(&self.exec)
+            .spawn()
+            .expect("failed to start command.");
     }
 }
 

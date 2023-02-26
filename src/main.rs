@@ -1,15 +1,30 @@
-use iced::widget::{column, container, horizontal_rule, horizontal_space, row, text, text_input};
+use iced::widget::{column, container, horizontal_rule, horizontal_space, row, text, text_input, scrollable};
 use iced::{
     alignment, executor, keyboard, subscription, theme, window, Application, Background, Color,
     Command, Element, Event, Length, Settings, Theme,
 };
 
-//struct LanchFlags {
-//    cache: Cache,
-//}
+mod suggestion;
+use suggestion::program::*;
+use suggestion::*;
 
-fn lanch_settings() -> iced::Settings<()> {
-    let mut settings: iced::Settings<()> = Settings::default();
+mod cache;
+use cache::*;
+
+#[derive(Default, Debug)]
+struct LanchFlags {
+    cache: LanchCache,
+}
+
+fn lanch_settings() -> iced::Settings<LanchFlags> {
+    let flags = LanchFlags {
+        cache: LanchCache::from_disk_or_new().unwrap(),
+    };
+
+    let mut settings: iced::Settings<LanchFlags> = Settings {
+        flags,
+        ..Default::default()
+    };
 
     settings.id = Some(String::from("lanch")); // this sets the WM_CLASS on x11 and makes it easy
                                                // to define the window as floating in tiling
@@ -25,8 +40,6 @@ fn lanch_settings() -> iced::Settings<()> {
 }
 
 fn main() -> iced::Result {
-    
-
     match Lanch::run(lanch_settings()) {
         Ok(()) => (),
         Err(e) => return Err(e),
@@ -37,14 +50,12 @@ fn main() -> iced::Result {
 
 // Could possibly be extended for grid layouts
 #[derive(Debug, Clone)]
-#[allow(unused)]
 enum Direction {
     Up,
     Down,
 }
 
 #[derive(Debug, Clone)]
-#[allow(unused)]
 enum LanchMessage {
     QueryChanged(String),
     NavigateList(Direction),
@@ -62,9 +73,7 @@ struct Lanch {
 
 impl Lanch {
     // generates suggestions based on the query
-    fn generate_suggestions(&mut self) {
-        
-    }
+    fn generate_suggestions(&mut self) {}
 
     // takes a key event and returns a message
     fn handle_key(
@@ -77,10 +86,13 @@ impl Lanch {
             // I don't think it's possible to have these in one statement :/ (guard works for both
             // patterns with |, and we only want it for the J)
             KeyCode::Down => Some(LanchMessage::NavigateList(Direction::Down)),
-            KeyCode::J if modifiers == Modifiers::CTRL => Some(LanchMessage::NavigateList(Direction::Down)),
-
-            KeyCode::Up  => Some(LanchMessage::NavigateList(Direction::Up)),
-            KeyCode::K if modifiers == Modifiers::CTRL => Some(LanchMessage::NavigateList(Direction::Up)),
+            KeyCode::J if modifiers == Modifiers::CTRL => {
+                Some(LanchMessage::NavigateList(Direction::Down))
+            }
+            KeyCode::Up => Some(LanchMessage::NavigateList(Direction::Up)),
+            KeyCode::K if modifiers == Modifiers::CTRL => {
+                Some(LanchMessage::NavigateList(Direction::Up))
+            }
 
             KeyCode::Enter => Some(LanchMessage::ExecuteSelected),
             KeyCode::Escape => Some(LanchMessage::Escape),
@@ -92,21 +104,15 @@ impl Lanch {
 impl Application for Lanch {
     type Message = LanchMessage;
     type Executor = executor::Default;
-    type Flags = ();
+    type Flags = LanchFlags;
     type Theme = Theme;
 
-    fn new(_flags: Self::Flags) -> (Lanch, Command<Self::Message>) {
+    fn new(flags: Self::Flags) -> (Lanch, Command<Self::Message>) {
         (
             Lanch {
                 theme: Theme::Dark,
                 query: String::new(),
-                //suggestions: Vec::new(),
-                suggestions: vec![
-                    Box::new(Program::with_name("firefox")),
-                    Box::new(Program::with_name("st")),
-                    Box::new(Program::with_name("Gimp")),
-                    Box::new(Program::with_name("Emacs")),
-                ],
+                suggestions: flags.cache.programs.into_iter().map(|e| Box::new(e) as Box<dyn Suggestion>).collect(),
                 selected: 1,
             },
             window::gain_focus(),
@@ -134,7 +140,11 @@ impl Application for Lanch {
                 }
             },
             LanchMessage::ExecuteSelected => {
-                self.suggestions.get(self.selected).unwrap().execute();
+                self.suggestions
+                    .iter()
+                    .filter(|s| s.to_string().contains(&self.query))
+                    .collect::<Vec<&Box<dyn Suggestion>>>()
+                    .get(self.selected).unwrap().execute();
 
                 return window::close();
             }
@@ -170,6 +180,7 @@ impl Application for Lanch {
                 // Display all the suggestions
                 self.suggestions
                     .iter()
+                    .filter(|s| s.to_string().contains(&self.query))
                     .enumerate()
                     .map(|(i, sg)| {
                         if i == self.selected {
@@ -179,15 +190,18 @@ impl Application for Lanch {
                             .style(theme::Container::Custom(Box::new(SelectedSuggestionStyle)))
                             .into()
                         } else {
-                            sg.view()
-                                .map(move |message| LanchMessage::SuggestionMessage(message))
+                            column![
+                                sg.view()
+                                    .map(move |message| LanchMessage::SuggestionMessage(message))
+                            ].into()
                         }
                     })
                     .collect(),
             )
-            .spacing(5);
+            .spacing(5)
+            .width(Length::Fill);
 
-            container(list)
+            container(scrollable(list))
         };
 
         container(column![
@@ -196,7 +210,6 @@ impl Application for Lanch {
             row![
                 horizontal_space(Length::FillPortion(1)),
                 suggestions.width(Length::FillPortion(40)),
-                horizontal_space(Length::FillPortion(1)),
             ]
         ])
         .into()
@@ -216,10 +229,6 @@ impl Application for Lanch {
         self.theme.clone()
     }
 }
-
-mod suggestion;
-use suggestion::program::*;
-use suggestion::*;
 
 struct SelectedSuggestionStyle;
 

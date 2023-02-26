@@ -1,0 +1,80 @@
+use super::*;
+use serde::{Deserialize, Serialize};
+use std::io::prelude::*;
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct LanchCache {
+    // Programs are applications found in /usr/share/applications
+    programs: Vec<Program>,
+}
+
+impl LanchCache {
+    const CACHE_DIR: &str = "/home/vsh/.cache/lanch/cachefile";
+
+    fn generate_programs() -> Result<Vec<Program>, std::io::Error> {
+        use std::fs;
+        let mut ret: Vec<Program> = Vec::new();
+
+        for entry in fs::read_dir("/usr/share/applications")? {
+            let file = fs::read_to_string(entry?.path())?;
+
+            for line in file.lines() {
+                if line.starts_with("Exec=") {
+                    // There has to be an = sign, so this should never panic
+                    let (_, program_name) = line.split_once("=").unwrap();
+
+                    if !program_name.is_empty() {
+                        ret.push(Program::with_name(program_name));
+                    }
+                    break;
+                }
+            }
+        }
+
+        Ok(ret)
+    }
+
+    // Generates new cache and writes it to disk
+    pub fn new() -> Self {
+        println!("generating new cache..");
+        use std::fs::File;
+
+        // TODO: gen actual cache
+        let cache = Self {
+            programs: vec![Program::with_name("firefox")],
+        };
+
+        
+
+        let mut cache_file = match File::open(LanchCache::CACHE_DIR) {
+            Ok(f) => f,
+            Err(_) => {
+                println!("new: cache file does not exist. creating");
+
+                File::create(LanchCache::CACHE_DIR).unwrap()
+            }
+        };
+
+        let encoded: Vec<u8> = bincode::serialize(&cache).unwrap();
+        cache_file.write_all(&encoded).unwrap();
+
+        cache
+    }
+
+    pub fn from_disk_or_new() -> Self {
+        use std::fs;
+
+        let data = fs::read(LanchCache::CACHE_DIR);
+        match data {
+            Ok(data) => {
+                println!("cache exitsts! attempting to decode.");
+                let decoded: LanchCache = bincode::deserialize(&data[..]).unwrap();
+                return decoded;
+            }
+            Err(_) => {
+                println!("cache does not exist!");
+                return Self::new();
+            }
+        }
+    }
+}
