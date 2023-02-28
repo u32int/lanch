@@ -27,7 +27,7 @@ impl Program {
 
 impl Suggestion for Program {
     fn view(&self) -> Element<SuggestionMessage> {
-        text(format!("Program: {}", self.name)).into()
+        text(format!("{}", self.name)).into()
     }
 
     fn execute(&self) {
@@ -36,6 +36,10 @@ impl Suggestion for Program {
             .arg(&self.exec)
             .spawn()
             .expect("failed to start command.");
+    }
+
+    fn matches(&self, query: &String) -> bool {
+        self.name.contains(query)
     }
 }
 
