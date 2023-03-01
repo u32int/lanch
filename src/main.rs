@@ -256,7 +256,8 @@ impl Application for Lanch {
                     .map(|elem| Rc::new(elem) as Rc<dyn Suggestion>)
                     .collect(),
                 modules: vec![
-                    Rc::new(timedate::TimeSuggestion),
+                    Rc::new(timedate::TimeSuggestion::default()),
+                    Rc::new(timedate::DateSuggestion::default()),
                     Rc::new(help::HelpSuggestion),
                 ], // temporary, will load from config eventually
                 query: String::new(),
