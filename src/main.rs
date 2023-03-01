@@ -17,6 +17,10 @@ use suggestion::*;
 mod cache;
 use cache::*;
 
+lazy_static::lazy_static! {
+    static ref QUERY_INPUT_ID: text_input::Id = text_input::Id::unique();
+}
+
 #[derive(Default, Debug)]
 struct LanchFlags {
     cache: LanchCache,
@@ -254,15 +258,19 @@ impl Application for Lanch {
                 modules: vec![
                     Rc::new(timedate::TimeSuggestion),
                     Rc::new(help::HelpSuggestion),
-                ], // temporary, will load from
-                // config eventually
+                ], // temporary, will load from config eventually
                 query: String::new(),
                 suggestions: Vec::new(),
                 suggestion_separators: VecDeque::new(),
                 selected: 1,
                 theme: Theme::Dark,
             },
-            window::gain_focus(),
+            Command::batch(
+                vec![
+                    window::gain_focus(),
+                    text_input::focus(QUERY_INPUT_ID.clone())
+                ]
+            )
         )
     }
 
@@ -273,7 +281,7 @@ impl Application for Lanch {
     fn update(&mut self, msg: Self::Message) -> Command<Self::Message> {
         match msg {
             LanchMessage::QueryChanged(q) => {
-                self.query = q.trim().to_string();
+                self.query = q.trim_start().to_string();
                 self.selected = 0;
                 self.generate_suggestions();
 
@@ -316,8 +324,9 @@ impl Application for Lanch {
     }
 
     fn view(&self) -> Element<Self::Message> {
-        let input =
-            text_input("Search...", &self.query, LanchMessage::QueryChanged).width(Length::Fill);
+        let input = text_input("Search...", &self.query, LanchMessage::QueryChanged)
+            .id(QUERY_INPUT_ID.clone())
+            .width(Length::Fill);
 
         let suggestions = container(self.view_suggestions());
 
