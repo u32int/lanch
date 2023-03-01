@@ -5,15 +5,15 @@ use std::io::prelude::*;
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct LanchCache {
     // Programs are applications found in /usr/share/applications
-    pub programs: Vec<Program>,
+    pub programs: Vec<ProgramSuggestion>,
 }
 
 impl LanchCache {
     const CACHE_DIR: &str = "/home/vsh/.cache/lanch/cachefile";
 
-    fn generate_programs() -> Result<Vec<Program>, std::io::Error> {
+    fn generate_programs() -> Result<Vec<ProgramSuggestion>, std::io::Error> {
         use std::fs;
-        let mut ret: Vec<Program> = Vec::new();
+        let mut ret: Vec<ProgramSuggestion> = Vec::new();
 
         for entry in fs::read_dir("/usr/share/applications")? {
             let file = fs::read_to_string(entry?.path())?;
@@ -51,7 +51,7 @@ impl LanchCache {
             }
 
             if !name.is_empty() && !exec.is_empty() {
-                ret.push(Program::new(&name[0..10], &exec[0..10]));
+                ret.push(ProgramSuggestion::new(&name[0..10], &exec[0..10]));
             }
         }
 
