@@ -21,8 +21,8 @@ impl Suggestion for HelpSuggestion {
 
     fn execute(&self) {} 
 
-    fn matches(&self, query: &String) -> bool {
-        query.starts_with("?") || query.starts_with("help")
+    fn matches(&self, query: &str) -> bool {
+        query.starts_with('?') || query.starts_with("help")
     }
 }
 

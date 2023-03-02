@@ -8,24 +8,22 @@ use std::process::Command;
 
 use super::*;
 
-// I would use 'Application' but that is already taken by iced
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub struct ProgramSuggestion {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ExecutableSuggestion {
     name: String,
     exec: String,
-    // TODO: icon
 }
 
-impl ProgramSuggestion {
+impl ExecutableSuggestion {
     pub fn new(name: &str, exec: &str) -> Self {
-        ProgramSuggestion {
+        ExecutableSuggestion {
             name: String::from(name),
             exec: String::from(exec),
         }
     }
 }
 
-impl Suggestion for ProgramSuggestion {
+impl Suggestion for ExecutableSuggestion {
     fn view(&self) -> Element<SuggestionMessage> {
         text(self.name.to_string()).into()
     }
@@ -45,7 +43,7 @@ impl Suggestion for ProgramSuggestion {
     }
 }
 
-impl Display for ProgramSuggestion {
+impl Display for ExecutableSuggestion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name)
     }

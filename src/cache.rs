@@ -1,18 +1,23 @@
-use super::*;
+use super::suggestion::{executable::ExecutableSuggestion, program::ProgramSuggestion};
 use serde::{Deserialize, Serialize};
+use std::env;
+use std::fs;
 use std::io::prelude::*;
+
+lazy_static::lazy_static! {
+    static ref CACHE_DIR: String = format!("{}/.cache/lanch/cachefile", env::var("HOME").unwrap());
+}
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct LanchCache {
     // Programs are applications found in /usr/share/applications
     pub programs: Vec<ProgramSuggestion>,
+
+    pub executables: Vec<ExecutableSuggestion>,
 }
 
 impl LanchCache {
-    const CACHE_DIR: &str = "/home/vsh/.cache/lanch/cachefile";
-
     fn generate_programs() -> Result<Vec<ProgramSuggestion>, std::io::Error> {
-        use std::fs;
         let mut ret: Vec<ProgramSuggestion> = Vec::new();
 
         for entry in fs::read_dir("/usr/share/applications")? {
@@ -25,33 +30,56 @@ impl LanchCache {
             for line in file.lines() {
                 if line.starts_with("Exec=") {
                     // There has to be an = sign, so this should never panic
-                    let (_, exec_s) = line.split_once("=").unwrap();
+                    let (_, exec_s) = line.split_once('=').unwrap();
 
                     if !exec_s.is_empty() {
                         exec = exec_s
                     }
 
                     if !name.is_empty() {
-                        break
+                        break;
                     }
                 }
 
                 if line.starts_with("Name=") {
                     // There has to be an = sign, so this should never panic
-                    let (_, name_s) = line.split_once("=").unwrap();
+                    let (_, name_s) = line.split_once('=').unwrap();
 
                     if !name_s.is_empty() {
-                        name = name_s; 
+                        name = name_s;
                     }
 
                     if !exec.is_empty() {
-                        break
+                        break;
                     }
                 }
             }
 
             if !name.is_empty() && !exec.is_empty() {
-                ret.push(ProgramSuggestion::new(&name[0..10], &exec[0..10]));
+                ret.push(ProgramSuggestion::new(name, exec));
+            }
+        }
+
+        Ok(ret)
+    }
+
+    fn generate_executables() -> Result<Vec<ExecutableSuggestion>, std::io::Error> {
+        let mut ret: Vec<ExecutableSuggestion> = Vec::new();
+        let path = env::var("PATH").unwrap_or("/bin".to_string());
+
+        for dir in path.split(':') {
+            // filter out directories and invalid entries
+            let dir = match fs::read_dir(dir) {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
+            for entry in dir.flatten() {
+                if !entry.metadata()?.is_dir() {
+                    ret.push(ExecutableSuggestion::new(
+                        entry.file_name().to_str().unwrap(),
+                        entry.path().to_str().unwrap(),
+                    ))
+                }
             }
         }
 
@@ -60,19 +88,17 @@ impl LanchCache {
 
     // Generates new cache and writes it to disk
     pub fn new() -> Result<Self, std::io::Error> {
+        println!("[CACHE] generating new cache at {}", CACHE_DIR.clone());
         use std::fs::File;
 
-        // TODO: gen actual cache
         let cache = Self {
             programs: Self::generate_programs()?,
+            executables: Self::generate_executables()?,
         };
 
-        let mut cache_file = match File::open(LanchCache::CACHE_DIR) {
+        let mut cache_file = match File::open(CACHE_DIR.clone()) {
             Ok(f) => f,
-            Err(_) => {
-
-                File::create(LanchCache::CACHE_DIR).unwrap()
-            }
+            Err(_) => File::create(CACHE_DIR.clone()).unwrap(),
         };
 
         let encoded: Vec<u8> = bincode::serialize(&cache).unwrap();
@@ -82,16 +108,14 @@ impl LanchCache {
     }
 
     pub fn from_disk_or_new() -> Result<Self, std::io::Error> {
-        use std::fs;
-
-        let data = fs::read(LanchCache::CACHE_DIR);
+        let data = fs::read(CACHE_DIR.clone());
         match data {
             Ok(data) => {
                 let decoded: LanchCache = bincode::deserialize(&data[..]).unwrap();
-                return Ok(decoded);
+                Ok(decoded)
             }
             Err(_) => {
-                return Self::new();
+                Self::new()
             }
         }
     }

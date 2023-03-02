@@ -8,28 +8,47 @@ use std::fmt::Display;
 
 use super::*;
 
-fn get_timezone(query: &String) -> Option<Tz> {
-    for word in query.split(' ') {
-        if word.is_empty() {
-            continue;
-        }
+fn get_timezone(query: &str, keyword: &str) -> Option<Tz> {
+    let mut tz_string = query.to_string();
 
-        // every (i think?) timezone name starts with a capital letter and this allows typing the
-        // lowercase version and still getting the result
-        let mut capitalized = String::from(word);
-        // probably not a very optimal way to do this
-        capitalized.replace_range(0..1, &capitalized.get(0..1).unwrap().to_uppercase());
+    let keyword_idx = query.find(keyword).unwrap();
+    tz_string.replace_range(keyword_idx..keyword_idx + keyword.len(), "");
+    let tz_string = tz_string.trim();
 
-        if let Ok(tz) = capitalized.parse::<Tz>() {
+    if tz_string.is_empty() {
+        return None;
+    }
+
+    let tz_string: String = tz_string
+        .split(' ')
+        .filter(|word| !word.is_empty())
+        .enumerate()
+        .map(|(i, word)| {
+            format!(
+                "{}{}{}",
+                if i != 0 { "_" } else { "" },
+                word.get(0..1).unwrap().to_uppercase(),
+                word.get(1..).unwrap()
+            )
+        })
+        .collect();
+
+    if let Ok(tz) = tz_string.parse::<Tz>() {
+        return Some(tz);
+    }
+
+    // this shouldn't be _too_ expensive since .parse::<Tz>() uses a hashmap under the hood
+    let prefixes = [
+        "Africa",
+        "Australia",
+        "Asia",
+        "Europe",
+        "America",
+        "Pacific",
+    ];
+    for prefix in prefixes {
+        if let Ok(tz) = format!("{prefix}/{tz_string}").parse::<Tz>() {
             return Some(tz);
-        }
-
-        // this shouldn't be _too_ expensive since .parse::<Tz>() uses a hashmap under the hood
-        let prefixes = ["Africa", "Australia", "Asia", "Europe", "America", "Pacific"]; 
-        for prefix in prefixes {
-            if let Ok(tz) = format!("{prefix}/{capitalized}").parse::<Tz>() {
-                return Some(tz);
-            }
         }
     }
 
@@ -57,9 +76,9 @@ impl Suggestion for TimeSuggestion {
 
     fn execute(&self) {} // TODO: copy to clipboard
 
-    fn matches(&self, query: &String) -> bool {
+    fn matches(&self, query: &str) -> bool {
         if query.contains("time") {
-            self.time_zone.set(get_timezone(query));
+            self.time_zone.set(get_timezone(query, "time"));
             return true;
         }
         false
@@ -97,9 +116,9 @@ impl Suggestion for DateSuggestion {
 
     fn execute(&self) {} // TODO: copy to clipboard
 
-    fn matches(&self, query: &String) -> bool {
+    fn matches(&self, query: &str) -> bool {
         if query.contains("date") {
-            self.time_zone.set(get_timezone(query));
+            self.time_zone.set(get_timezone(query, "date"));
             return true;
         }
         false

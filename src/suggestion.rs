@@ -13,9 +13,10 @@ pub trait Suggestion: Display + Debug {
     fn execute(&self);
 
     // condition checked to decide whether or not to display the suggestion based on the query
-    fn matches(&self, query: &String) -> bool;
+    fn matches(&self, query: &str) -> bool;
 }
 
 pub mod program;
+pub mod executable;
 pub mod timedate;
 pub mod help;

@@ -11,7 +11,6 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 
 mod suggestion;
-use suggestion::program::*;
 use suggestion::*;
 
 mod cache;
@@ -20,6 +19,8 @@ use cache::*;
 lazy_static::lazy_static! {
     static ref QUERY_INPUT_ID: text_input::Id = text_input::Id::unique();
 }
+
+const MAX_SUGGESTIONS: usize = 25;
 
 #[derive(Default, Debug)]
 struct LanchFlags {
@@ -94,6 +95,7 @@ struct Lanch {
     // cached programs to limit potentially hundreds of fs calls to 1 cache.
     // TODO: refresh periodically
     program_cache: Vec<Rc<dyn Suggestion>>,
+    executable_cache: Vec<Rc<dyn Suggestion>>,
 
     // loaded modules providing extra suggestion functionality
     modules: Vec<Rc<dyn Suggestion>>,
@@ -119,14 +121,16 @@ impl Lanch {
     fn generate_suggestions(&mut self) {
         self.suggestions.clear();
         self.suggestion_separators.clear();
+
         if self.query.is_empty() {
             return;
         }
 
+        let trimmed_query = self.query.trim();
         let mut match_counter: usize = 0;
 
         for module in &self.modules {
-            if module.matches(&self.query) {
+            if module.matches(trimmed_query) {
                 self.suggestions.push(Rc::clone(module));
                 self.suggestion_separators
                     .push_back((match_counter, module.to_string()));
@@ -136,11 +140,34 @@ impl Lanch {
 
         self.suggestion_separators
             .push_back((match_counter, String::from("Programs")));
+
         // filter and push matching program suggestions
-        self.program_cache
-            .iter()
-            .filter(|program| program.matches(&self.query))
-            .for_each(|program| self.suggestions.push(Rc::clone(program)));
+        // NOTE: this is very inefficient for now, the search is O(n) (with 7000+ (!) items on my
+        // system). Limiting it to only use the first MAX_SUGGESTION matches works for now but is not ideal.
+        // We could store a more efficient data structure that Impls Iterator<item = Suggestion>
+        for program in &self.program_cache {
+            if match_counter > MAX_SUGGESTIONS {
+                break;
+            }
+            if program.matches(trimmed_query) {
+                self.suggestions.push(Rc::clone(program));
+                match_counter += 1;
+            }
+        }
+
+        self.suggestion_separators
+            .push_back((match_counter, String::from("Executables")));
+
+        for executable in &self.executable_cache {
+            if match_counter > MAX_SUGGESTIONS {
+                break;
+            }
+
+            if executable.matches(trimmed_query) {
+                self.suggestions.push(Rc::clone(executable));
+                match_counter += 1;
+            }
+        }
     }
 
     fn view_suggestions(&self) -> Element<LanchMessage> {
@@ -171,14 +198,13 @@ impl Lanch {
                     let elem = if i == self.selected {
                         container(
                             sg.view()
-                                .map(move |message| LanchMessage::SuggestionMessage(message)),
+                                .map(LanchMessage::SuggestionMessage),
                         )
                         .style(theme::Container::Custom(Box::new(SelectedSuggestionStyle)))
                         .into()
                     } else {
                         sg.view()
-                            .map(move |message| LanchMessage::SuggestionMessage(message))
-                            .into()
+                            .map(LanchMessage::SuggestionMessage)
                     };
 
                     if let Some(sep) = self.suggestion_separators.get(sep_counter) {
@@ -255,6 +281,12 @@ impl Application for Lanch {
                     .into_iter()
                     .map(|elem| Rc::new(elem) as Rc<dyn Suggestion>)
                     .collect(),
+                executable_cache: flags
+                    .cache
+                    .executables
+                    .into_iter()
+                    .map(|elem| Rc::new(elem) as Rc<dyn Suggestion>)
+                    .collect(),
                 modules: vec![
                     Rc::new(timedate::TimeSuggestion::default()),
                     Rc::new(timedate::DateSuggestion::default()),
@@ -266,17 +298,15 @@ impl Application for Lanch {
                 selected: 1,
                 theme: Theme::Dark,
             },
-            Command::batch(
-                vec![
-                    window::gain_focus(),
-                    text_input::focus(QUERY_INPUT_ID.clone())
-                ]
-            )
+            Command::batch(vec![
+                window::gain_focus(),
+                text_input::focus(QUERY_INPUT_ID.clone()),
+            ]),
         )
     }
 
     fn title(&self) -> String {
-        String::from("launch")
+        String::from("lanch")
     }
 
     fn update(&mut self, msg: Self::Message) -> Command<Self::Message> {
@@ -303,7 +333,7 @@ impl Application for Lanch {
             }
             LanchMessage::NavigateList(d) => match d {
                 Direction::Up => {
-                    self.selected = (self.selected.checked_sub(1).unwrap_or(0))
+                    self.selected = (self.selected.saturating_sub(1))
                         .clamp(0, self.suggestions.len());
                 }
                 Direction::Down => {
