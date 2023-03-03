@@ -25,7 +25,7 @@ impl ExecutableSuggestion {
 
 impl Suggestion for ExecutableSuggestion {
     fn view(&self) -> Element<SuggestionMessage> {
-        text(self.name.to_string()).into()
+        text(format!("{} [{}]", self.name, self.exec)).into()
     }
 
     fn execute(&self) {
@@ -38,8 +38,14 @@ impl Suggestion for ExecutableSuggestion {
         cmd.spawn().expect("could not execute command.");
     }
 
-    fn matches(&self, query: &str) -> bool {
-        self.name.to_lowercase().contains(&query.to_lowercase())
+    fn matches(&self, query: &str) -> MatchLevel {
+        if query == self.name {
+            return MatchLevel::Exact
+        } else if self.name.to_lowercase().contains(&query.to_lowercase()) {
+            return MatchLevel::Contained
+        }
+
+        MatchLevel::NoMatch
     }
 }
 

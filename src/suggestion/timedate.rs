@@ -76,12 +76,19 @@ impl Suggestion for TimeSuggestion {
 
     fn execute(&self) {} // TODO: copy to clipboard
 
-    fn matches(&self, query: &str) -> bool {
+    fn matches(&self, query: &str) -> MatchLevel {
         if query.contains("time") {
-            self.time_zone.set(get_timezone(query, "time"));
-            return true;
+            let tz = get_timezone(query, "time");
+            self.time_zone.set(tz);
+
+            return if tz.is_some() || query == "time" {
+                MatchLevel::Exact
+            } else {
+                MatchLevel::Contained
+            };
         }
-        false
+
+        MatchLevel::NoMatch
     }
 }
 
@@ -116,12 +123,19 @@ impl Suggestion for DateSuggestion {
 
     fn execute(&self) {} // TODO: copy to clipboard
 
-    fn matches(&self, query: &str) -> bool {
+    fn matches(&self, query: &str) -> MatchLevel {
         if query.contains("date") {
-            self.time_zone.set(get_timezone(query, "date"));
-            return true;
+            let tz = get_timezone(query, "date");
+            self.time_zone.set(tz);
+
+            return if tz.is_some() || query == "time" {
+                MatchLevel::Exact
+            } else {
+                MatchLevel::Contained
+            };
         }
-        false
+
+        MatchLevel::NoMatch
     }
 }
 

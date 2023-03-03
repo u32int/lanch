@@ -104,7 +104,7 @@ struct Lanch {
     query: String,
 
     // suggestions to display to the user
-    suggestions: Vec<Rc<dyn Suggestion>>,
+    suggestions: VecDeque<Rc<dyn Suggestion>>,
 
     // indicates to the rendering code where to put section separators
     suggestion_separators: VecDeque<(usize, String)>,
@@ -126,16 +126,25 @@ impl Lanch {
             return;
         }
 
-        let trimmed_query = self.query.trim();
         let mut match_counter: usize = 0;
+        let mut exact_matches: usize = 0;
+        let trimmed_query = self.query.trim();
 
         for module in &self.modules {
-            if module.matches(trimmed_query) {
-                self.suggestions.push(Rc::clone(module));
-                self.suggestion_separators
-                    .push_back((match_counter, module.to_string()));
-                match_counter += 1;
+            match module.matches(trimmed_query) {
+                MatchLevel::Contained => {
+                    self.suggestions.push_back(Rc::clone(module));
+                }
+                MatchLevel::Exact => {
+                    self.suggestions.push_front(Rc::clone(module));
+                    exact_matches += 1;
+                }
+                MatchLevel::NoMatch => continue,
             }
+
+            self.suggestion_separators
+                .push_back((match_counter, module.to_string()));
+            match_counter += 1;
         }
 
         self.suggestion_separators
@@ -149,10 +158,19 @@ impl Lanch {
             if match_counter > MAX_SUGGESTIONS {
                 break;
             }
-            if program.matches(trimmed_query) {
-                self.suggestions.push(Rc::clone(program));
-                match_counter += 1;
+
+            match program.matches(trimmed_query) {
+                MatchLevel::Contained => {
+                    self.suggestions.push_back(Rc::clone(program));
+                }
+                MatchLevel::Exact => {
+                    self.suggestions.push_front(Rc::clone(program));
+                    exact_matches += 1;
+                }
+                MatchLevel::NoMatch => continue,
             }
+
+            match_counter += 1;
         }
 
         self.suggestion_separators
@@ -163,10 +181,35 @@ impl Lanch {
                 break;
             }
 
-            if executable.matches(trimmed_query) {
-                self.suggestions.push(Rc::clone(executable));
-                match_counter += 1;
+            match executable.matches(trimmed_query) {
+                MatchLevel::Contained => {
+                    self.suggestions.push_back(Rc::clone(executable));
+                }
+                MatchLevel::Exact => {
+                    self.suggestions.push_front(Rc::clone(executable));
+                    exact_matches += 1;
+                }
+                MatchLevel::NoMatch => continue,
             }
+
+            match_counter += 1;
+        }
+
+        if exact_matches > 0 {
+            self.suggestion_separators
+                .iter_mut()
+                .for_each(|sep| sep.0 += exact_matches);
+
+            self.suggestion_separators
+                .push_front((0, String::from("Exact Matches")));
+        }
+
+        if self.suggestions.len() == 0 {
+            self.suggestion_separators
+                .push_back((match_counter, String::from("Run Command")));
+
+            self.suggestions
+                .push_back(Rc::new(command::CommandSuggestion::with_cmd(&self.query)));
         }
     }
 
@@ -196,15 +239,11 @@ impl Lanch {
                 .enumerate()
                 .map(|(i, sg)| {
                     let elem = if i == self.selected {
-                        container(
-                            sg.view()
-                                .map(LanchMessage::SuggestionMessage),
-                        )
-                        .style(theme::Container::Custom(Box::new(SelectedSuggestionStyle)))
-                        .into()
+                        container(sg.view().map(LanchMessage::SuggestionMessage))
+                            .style(theme::Container::Custom(Box::new(SelectedSuggestionStyle)))
+                            .into()
                     } else {
-                        sg.view()
-                            .map(LanchMessage::SuggestionMessage)
+                        sg.view().map(LanchMessage::SuggestionMessage)
                     };
 
                     if let Some(sep) = self.suggestion_separators.get(sep_counter) {
@@ -293,7 +332,7 @@ impl Application for Lanch {
                     Rc::new(help::HelpSuggestion),
                 ], // temporary, will load from config eventually
                 query: String::new(),
-                suggestions: Vec::new(),
+                suggestions: VecDeque::new(),
                 suggestion_separators: VecDeque::new(),
                 selected: 1,
                 theme: Theme::Dark,
@@ -333,8 +372,8 @@ impl Application for Lanch {
             }
             LanchMessage::NavigateList(d) => match d {
                 Direction::Up => {
-                    self.selected = (self.selected.saturating_sub(1))
-                        .clamp(0, self.suggestions.len());
+                    self.selected =
+                        (self.selected.saturating_sub(1)).clamp(0, self.suggestions.len());
                 }
                 Direction::Down => {
                     self.selected = (self.selected + 1).clamp(0, self.suggestions.len() - 1);

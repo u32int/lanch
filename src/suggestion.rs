@@ -1,6 +1,12 @@
 use iced::Element;
 use std::fmt::{Debug, Display};
 
+pub enum MatchLevel {
+    Exact,
+    Contained,
+    NoMatch
+}
+
 #[derive(Debug, Clone)]
 pub enum SuggestionMessage {}
 
@@ -13,10 +19,11 @@ pub trait Suggestion: Display + Debug {
     fn execute(&self);
 
     // condition checked to decide whether or not to display the suggestion based on the query
-    fn matches(&self, query: &str) -> bool;
+    fn matches(&self, query: &str) -> MatchLevel;
 }
 
-pub mod program;
 pub mod executable;
-pub mod timedate;
 pub mod help;
+pub mod program;
+pub mod timedate;
+pub mod command;

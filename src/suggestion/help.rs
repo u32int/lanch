@@ -21,8 +21,12 @@ impl Suggestion for HelpSuggestion {
 
     fn execute(&self) {} 
 
-    fn matches(&self, query: &str) -> bool {
-        query.starts_with('?') || query.starts_with("help")
+    fn matches(&self, query: &str) -> MatchLevel {
+        if query == "?" || query == "help" {
+            return MatchLevel::Exact
+        }
+
+        MatchLevel::NoMatch
     }
 }
 
