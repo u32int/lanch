@@ -1,5 +1,13 @@
-## lanch
+<div align="center">
+
+# Lanch
+
 lanch is an application launcher written in rust using the iced ui toolkit.
+
+<img src="./img/preview_1.png" alt="preview 1">
+<img src="./img/preview_2.png" alt="preview 2">
+
+</div>
 
 #### Goals
     - Usability first
