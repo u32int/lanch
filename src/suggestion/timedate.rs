@@ -1,7 +1,8 @@
 use chrono::Local;
 use chrono_tz::Tz;
 
-use iced::widget::text;
+use iced::widget::{column, horizontal_space, row, text, vertical_space};
+use iced::Length;
 
 use std::cell::Cell;
 use std::fmt::Display;
@@ -65,12 +66,22 @@ impl Suggestion for TimeSuggestion {
     fn view(&self) -> Element<SuggestionMessage> {
         let now = Local::now();
 
-        if let Some(tz) = self.time_zone.get() {
+        let txt = if let Some(tz) = self.time_zone.get() {
             let tz_now = now.with_timezone(&tz);
             text(format!("{}: {}", tz.name(), tz_now.format("%H:%M:%S")))
         } else {
             text(now.format("Local time: %H:%M:%S"))
-        }
+        };
+
+        column![
+            vertical_space(Length::Fixed(10f32)),
+            row![
+                horizontal_space(Length::Fixed(8f32)),
+                txt,
+                horizontal_space(Length::Fixed(8f32)),
+            ],
+            vertical_space(Length::Fixed(10f32)),
+        ]
         .into()
     }
 
@@ -108,7 +119,7 @@ impl Suggestion for DateSuggestion {
     fn view(&self) -> Element<SuggestionMessage> {
         let now = Local::now();
 
-        if let Some(tz) = self.time_zone.get() {
+        let txt = if let Some(tz) = self.time_zone.get() {
             let tz_now = now.with_timezone(&tz);
             text(format!(
                 "Date [{}]: {}",
@@ -117,7 +128,17 @@ impl Suggestion for DateSuggestion {
             ))
         } else {
             text(now.format("Date: %d of %B %Y"))
-        }
+        };
+
+        column![
+            vertical_space(Length::Fixed(10f32)),
+            row![
+                horizontal_space(Length::Fixed(8f32)),
+                txt,
+                horizontal_space(Length::Fixed(8f32)),
+            ],
+            vertical_space(Length::Fixed(10f32)),
+        ]
         .into()
     }
 
@@ -128,7 +149,7 @@ impl Suggestion for DateSuggestion {
             let tz = get_timezone(query, "date");
             self.time_zone.set(tz);
 
-            return if tz.is_some() || query == "time" {
+            return if tz.is_some() || query == "date" {
                 MatchLevel::Exact
             } else {
                 MatchLevel::Contained

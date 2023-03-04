@@ -23,7 +23,7 @@ impl CommandSuggestion {
 
 impl Suggestion for CommandSuggestion {
     fn view(&self) -> Element<SuggestionMessage> {
-        text(format!("Command: {}", self.cmd)).into()
+        text(format!("Command: \"{}\"", self.cmd)).into()
     }
 
     fn execute(&self) {
@@ -42,6 +42,6 @@ impl Suggestion for CommandSuggestion {
 
 impl Display for CommandSuggestion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.cmd)
+        write!(f, "Command")
     }
 }

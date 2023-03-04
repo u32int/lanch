@@ -13,6 +13,7 @@ pub struct LanchCache {
     // Programs are applications found in /usr/share/applications
     pub programs: Vec<ProgramSuggestion>,
 
+    // files in $PATH
     pub executables: Vec<ExecutableSuggestion>,
 }
 
