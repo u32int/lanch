@@ -6,6 +6,7 @@ use iced::{
     Command, Element, Event, Length, Theme,
 };
 
+use std::cell::Cell;
 use std::collections::VecDeque;
 use std::rc::Rc;
 
@@ -21,6 +22,9 @@ pub fn init(cache: cache::LanchCache) -> iced::Result {
 
 lazy_static::lazy_static! {
     static ref QUERY_INPUT_ID: text_input::Id = text_input::Id::unique();
+
+    static ref COLOR_INFO: iced::Color = Color::from_rgb8(51, 89, 218);
+    static ref COLOR_WARN: iced::Color = Color::from_rgb8(201, 49, 22);
 }
 
 const SUGGESTIONS_PER_PAGE: usize = 10;
@@ -51,6 +55,9 @@ struct Lanch {
 
     // application theme
     theme: Theme,
+
+    // warning/error message displayed in the ui
+    warn_msg: Cell<Option<String>>,
 }
 
 // Could possibly be extended for grid layouts
@@ -101,6 +108,7 @@ impl Application for Lanch {
                 selected: 0,
                 page: 0,
                 theme: Theme::Dark,
+                warn_msg: Cell::new(None),
             },
             Command::batch(vec![
                 window::gain_focus(),
@@ -168,9 +176,12 @@ impl Application for Lanch {
                 }
             },
             LanchMessage::ExecuteSelected => {
-                self.suggestions.get(self.selected).unwrap().execute();
-
-                return window::close();
+                match self.suggestions.get(self.selected).unwrap().execute() {
+                    Ok(()) => return window::close(),
+                    Err(e) => {
+                        self.warn_msg.set(Some(format!(" Error: {}", e)));
+                    }
+                }
             }
             LanchMessage::Escape => {
                 return window::close();
@@ -188,15 +199,16 @@ impl Application for Lanch {
 
         let suggestions = container(self.view_suggestions());
 
-        container(column![
-            // search box
-            input,
-            horizontal_rule(3),
-            vertical_space(Length::Fixed(5f32)),
-            // suggestions
-            suggestions.width(Length::Fill),
-            vertical_space(Length::Fill),
-            // info bar
+        let warntxt = self.warn_msg.take();
+        //self.warn_msg.set(None);
+
+        let info_bar = if let Some(txt) = warntxt {
+            container(text(txt))
+                .width(Length::Fill)
+                .style(theme::Container::Custom(Box::new(
+                    ContainerBackgroundStyle::new(COLOR_WARN.clone()),
+                )))
+        } else {
             container(row![text(format!(
                 " Page: {} [{}-{}/{}]",
                 self.page,
@@ -206,8 +218,19 @@ impl Application for Lanch {
             ))])
             .width(Length::Fill)
             .style(theme::Container::Custom(Box::new(
-                ContainerBackgroundStyle::new(Color::from_rgb8(51, 89, 218))
-            ))),
+                ContainerBackgroundStyle::new(COLOR_INFO.clone()),
+            )))
+        };
+
+        container(column![
+            // search box
+            input,
+            horizontal_rule(3),
+            vertical_space(Length::Fixed(5f32)),
+            // suggestions
+            suggestions.width(Length::Fill),
+            vertical_space(Length::Fill),
+            info_bar,
         ])
         .into()
     }
@@ -269,6 +292,7 @@ impl Lanch {
         }
     }
 
+    // Turns the suggestion field into widgets
     fn view_suggestions(&self) -> Element<LanchMessage> {
         if self.suggestions.is_empty() {
             let info = if self.query.is_empty() {
@@ -322,7 +346,6 @@ impl Lanch {
         list.into()
     }
 
-    // takes a key event and returns a message
     fn handle_key(
         key_code: keyboard::KeyCode,
         modifiers: keyboard::Modifiers,

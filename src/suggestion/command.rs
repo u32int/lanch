@@ -26,13 +26,16 @@ impl Suggestion for CommandSuggestion {
         text(format!("Command: \"{}\"", self.cmd)).into()
     }
 
-    fn execute(&self) {
+    fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
         let mut exec = self.cmd.split_whitespace();
         let mut cmd = Command::new(exec.next().unwrap());
         exec.for_each(|arg| {
             cmd.arg(arg);
         });
-        cmd.spawn().expect("could not execute command.");
+        match cmd.spawn() {
+            Ok(_) => Ok(()),
+            Err(e) => return Err(Box::new(e))
+        }
     }
 
     fn matches(&self, _query: &str) -> MatchLevel {

@@ -16,7 +16,7 @@ pub trait Suggestion: Display + Debug {
     fn view(&self) -> Element<SuggestionMessage>;
 
     // triggered when the user presses enter on the selected item
-    fn execute(&self);
+    fn execute(&self) -> Result<(), Box<dyn std::error::Error>>;
 
     // condition checked to decide whether or not to display the suggestion based on the query
     fn matches(&self, query: &str) -> MatchLevel;

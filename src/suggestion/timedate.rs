@@ -85,7 +85,7 @@ impl Suggestion for TimeSuggestion {
         .into()
     }
 
-    fn execute(&self) {} // TODO: copy to clipboard
+    fn execute(&self)  -> Result<(), Box<dyn std::error::Error>> { Ok(()) } // TODO: copy to clipboard
 
     fn matches(&self, query: &str) -> MatchLevel {
         if query.contains("time") {
@@ -142,7 +142,7 @@ impl Suggestion for DateSuggestion {
         .into()
     }
 
-    fn execute(&self) {} // TODO: copy to clipboard
+    fn execute(&self)  -> Result<(), Box<dyn std::error::Error>> { Ok(()) } // TODO: copy to clipboard
 
     fn matches(&self, query: &str) -> MatchLevel {
         if query.contains("date") {

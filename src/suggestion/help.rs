@@ -19,7 +19,9 @@ impl Suggestion for HelpSuggestion {
         ].into()
     }
 
-    fn execute(&self) {} 
+    fn execute(&self)-> Result<(), Box<dyn std::error::Error>> {
+        Ok(())
+    } 
 
     fn matches(&self, query: &str) -> MatchLevel {
         if query == "?" || query == "help" {
