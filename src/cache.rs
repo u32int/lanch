@@ -18,47 +18,51 @@ pub struct LanchCache {
 }
 
 impl LanchCache {
-    fn generate_programs() -> Result<Vec<ProgramSuggestion>, std::io::Error> {
+    fn generate_programs(icon_theme: Option<&str>) -> Result<Vec<ProgramSuggestion>, std::io::Error> {
         let mut ret: Vec<ProgramSuggestion> = Vec::new();
 
         for entry in fs::read_dir("/usr/share/applications")? {
             let file = fs::read_to_string(entry?.path())?;
-            // TODO: this entire part is _very_ ugly,
-            // there has to be a cleaner way
-            let mut name: &str = "";
-            let mut exec: &str = "";
+            let mut fields: [&str; 3] = ["", "", ""];
 
             for line in file.lines() {
-                if line.starts_with("Exec=") {
-                    // There has to be an = sign, so this should never panic
-                    let (_, exec_s) = line.split_once('=').unwrap();
-
-                    if !exec_s.is_empty() {
-                        exec = exec_s
-                    }
-
-                    if !name.is_empty() {
-                        break;
-                    }
-                }
-
                 if line.starts_with("Name=") {
-                    // There has to be an = sign, so this should never panic
-                    let (_, name_s) = line.split_once('=').unwrap();
+                    let (_, val) = line.split_once('=').unwrap_or(("", ""));
 
-                    if !name_s.is_empty() {
-                        name = name_s;
+                    if !val.is_empty() {
+                        fields[0] = val;
                     }
+                } else if line.starts_with("Exec=") {
+                    let (_, val) = line.split_once('=').unwrap_or(("", ""));
 
-                    if !exec.is_empty() {
-                        break;
+                    if !val.is_empty() {
+                        fields[1] = val;
                     }
+                } else if line.starts_with("Icon=") {
+                    let (_, val) = line.split_once('=').unwrap_or(("", ""));
+
+                    if !val.is_empty() {
+                        fields[2] = val;
+                    }
+                }
+
+                if fields.iter().all(|e| !e.is_empty()) {
+                    break;
                 }
             }
 
-            if !name.is_empty() && !exec.is_empty() {
-                ret.push(ProgramSuggestion::new(name, exec));
-            }
+            let icon_path = if let Some(theme) = icon_theme {
+                freedesktop_icons::lookup(fields[2])
+                    .with_size(48)
+                    .with_theme(theme)
+                    .find()
+            } else {
+                freedesktop_icons::lookup(fields[2])
+                    .with_size(48)
+                    .find()
+            };
+
+            ret.push(ProgramSuggestion::new(fields[0], fields[1], icon_path));
         }
 
         Ok(ret)
@@ -88,12 +92,12 @@ impl LanchCache {
     }
 
     // Generates new cache and writes it to disk
-    pub fn new() -> Result<Self, std::io::Error> {
+    pub fn new(icon_theme: Option<&str>) -> Result<Self, Box<dyn std::error::Error>> {
         println!("[CACHE] generating new cache at {}", CACHE_DIR.clone());
         use std::fs::File;
 
         let cache = Self {
-            programs: Self::generate_programs()?,
+            programs: Self::generate_programs(icon_theme)?,
             executables: Self::generate_executables()?,
         };
 
@@ -108,16 +112,14 @@ impl LanchCache {
         Ok(cache)
     }
 
-    pub fn from_disk_or_new() -> Result<Self, std::io::Error> {
+    pub fn from_disk_or_new(icon_theme: Option<&str>) -> Result<Self, Box<dyn std::error::Error>> {
         let data = fs::read(CACHE_DIR.clone());
         match data {
             Ok(data) => {
-                let decoded: LanchCache = bincode::deserialize(&data[..]).unwrap();
+                let decoded: LanchCache = bincode::deserialize(&data[..])?;
                 Ok(decoded)
             }
-            Err(_) => {
-                Self::new()
-            }
+            Err(_) => Self::new(icon_theme),
         }
     }
 }

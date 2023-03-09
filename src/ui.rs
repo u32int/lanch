@@ -353,8 +353,6 @@ impl Lanch {
         use keyboard::{KeyCode, Modifiers};
 
         match key_code {
-            // I don't think it's possible to have these in one statement :/ (guards work for both
-            // patterns with |, and we only want it for the J)
             KeyCode::Down => Some(LanchMessage::NavigateList(Direction::Down)),
             KeyCode::J if modifiers == Modifiers::CTRL => {
                 Some(LanchMessage::NavigateList(Direction::Down))

@@ -31,10 +31,7 @@ impl Suggestion for ExecutableSuggestion {
     fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
         let mut exec = self.exec.split_whitespace();
         let mut cmd = Command::new(exec.next().unwrap());
-        // TODO: this causes some problems with certain args, as they are meant for shells. (ex. "%u")
-        //exec.for_each(|arg| {
-        //    cmd.arg(arg);
-        //});
+
         match cmd.spawn() {
             Ok(_) => Ok(()),
             Err(e) => return Err(Box::new(e))
