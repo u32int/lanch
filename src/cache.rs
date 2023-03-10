@@ -1,11 +1,12 @@
 use super::suggestion::{executable::ExecutableSuggestion, program::ProgramSuggestion};
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::fs;
+use std::fs::{self, File};
 use std::io::prelude::*;
+use std::path::PathBuf;
 
 lazy_static::lazy_static! {
-    static ref CACHE_DIR: String = format!("{}/.cache/lanch/cachefile", env::var("HOME").unwrap());
+    static ref CACHE_FILE_PATH: PathBuf = PathBuf::from(format!("{}/.cache/lanch/cachefile", env::var("HOME").unwrap()));
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -18,7 +19,9 @@ pub struct LanchCache {
 }
 
 impl LanchCache {
-    fn generate_programs(icon_theme: Option<&str>) -> Result<Vec<ProgramSuggestion>, std::io::Error> {
+    fn generate_programs(
+        icon_theme: Option<&str>,
+    ) -> Result<Vec<ProgramSuggestion>, std::io::Error> {
         let mut ret: Vec<ProgramSuggestion> = Vec::new();
 
         for entry in fs::read_dir("/usr/share/applications")? {
@@ -57,9 +60,7 @@ impl LanchCache {
                     .with_theme(theme)
                     .find()
             } else {
-                freedesktop_icons::lookup(fields[2])
-                    .with_size(48)
-                    .find()
+                freedesktop_icons::lookup(fields[2]).with_size(48).find()
             };
 
             ret.push(ProgramSuggestion::new(fields[0], fields[1], icon_path));
@@ -93,17 +94,22 @@ impl LanchCache {
 
     // Generates new cache and writes it to disk
     pub fn new(icon_theme: Option<&str>) -> Result<Self, Box<dyn std::error::Error>> {
-        println!("[CACHE] generating new cache at {}", CACHE_DIR.clone());
-        use std::fs::File;
+        println!("[CACHE] generating new cache at {:?}", CACHE_FILE_PATH.clone());
+
+        let cache_dir = CACHE_FILE_PATH.parent().unwrap();
+        if !cache_dir.exists() {
+            println!("[CACHE] creating cache directory at {:?}", cache_dir);
+            fs::create_dir_all(cache_dir)?;
+        }
 
         let cache = Self {
             programs: Self::generate_programs(icon_theme)?,
             executables: Self::generate_executables()?,
         };
 
-        let mut cache_file = match File::open(CACHE_DIR.clone()) {
+        let mut cache_file = match File::open(CACHE_FILE_PATH.clone()) {
             Ok(f) => f,
-            Err(_) => File::create(CACHE_DIR.clone()).unwrap(),
+            Err(_) => File::create(CACHE_FILE_PATH.clone()).unwrap(),
         };
 
         let encoded: Vec<u8> = bincode::serialize(&cache).unwrap();
@@ -113,7 +119,7 @@ impl LanchCache {
     }
 
     pub fn from_disk_or_new(icon_theme: Option<&str>) -> Result<Self, Box<dyn std::error::Error>> {
-        let data = fs::read(CACHE_DIR.clone());
+        let data = fs::read(CACHE_FILE_PATH.clone());
         match data {
             Ok(data) => {
                 let decoded: LanchCache = bincode::deserialize(&data[..])?;

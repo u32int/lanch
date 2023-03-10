@@ -59,7 +59,7 @@ impl Suggestion for ProgramSuggestion {
         //});
         match cmd.spawn() {
             Ok(_) => Ok(()),
-            Err(e) => return Err(Box::new(e)),
+            Err(e) => Err(Box::new(e)),
         }
     }
 

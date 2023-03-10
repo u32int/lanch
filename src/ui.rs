@@ -206,7 +206,7 @@ impl Application for Lanch {
             container(text(txt))
                 .width(Length::Fill)
                 .style(theme::Container::Custom(Box::new(
-                    ContainerBackgroundStyle::new(COLOR_WARN.clone()),
+                    ContainerBackgroundStyle::new(*COLOR_WARN),
                 )))
         } else {
             container(row![text(format!(
@@ -218,7 +218,7 @@ impl Application for Lanch {
             ))])
             .width(Length::Fill)
             .style(theme::Container::Custom(Box::new(
-                ContainerBackgroundStyle::new(COLOR_INFO.clone()),
+                ContainerBackgroundStyle::new(*COLOR_INFO),
             )))
         };
 
@@ -279,15 +279,15 @@ impl Lanch {
         add_suggestions(&self.executable_cache);
 
         // CommandSuggestion - just run the provided query as a command
-        if trimmed_query.starts_with("!") {
+        if let Some(cmd) = trimmed_query.strip_prefix('!') {
             self.suggestions
                 .push_front(Rc::new(command::CommandSuggestion::with_cmd(
-                    &trimmed_query[1..],
+                    cmd,
                 )))
         } else {
             self.suggestions
                 .push_back(Rc::new(command::CommandSuggestion::with_cmd(
-                    &trimmed_query[..],
+                    trimmed_query,
                 )))
         }
     }
