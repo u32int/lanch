@@ -6,11 +6,11 @@ use iced::{
     Command, Element, Event, Length, Theme,
 };
 
-use std::cell::Cell;
 use std::collections::VecDeque;
 use std::rc::Rc;
 
 mod settings;
+mod infobar;
 
 use super::cache;
 use crate::suggestion::*;
@@ -29,7 +29,7 @@ lazy_static::lazy_static! {
 
 const SUGGESTIONS_PER_PAGE: usize = 10;
 
-struct Lanch {
+pub struct Lanch {
     // initialized from flags, contain the default values for window settings etc.
     options: LanchOptions,
 
@@ -56,19 +56,19 @@ struct Lanch {
     // application theme
     theme: Theme,
 
-    // warning/error message displayed in the ui
-    warn_msg: Cell<Option<String>>,
+    // the bottom info bar 
+    info_bar: infobar::InfoBar,
 }
 
 // Could possibly be extended for grid layouts
 #[derive(Debug, Clone)]
-enum Direction {
+pub enum Direction {
     Up,
     Down,
 }
 
 #[derive(Debug, Clone)]
-enum LanchMessage {
+pub enum LanchMessage {
     QueryChanged(String),
     NavigateList(Direction),
     ExecuteSelected,
@@ -108,7 +108,7 @@ impl Application for Lanch {
                 selected: 0,
                 page: 0,
                 theme: Theme::Dark,
-                warn_msg: Cell::new(None),
+                info_bar: infobar::InfoBar::new(),
             },
             Command::batch(vec![
                 window::gain_focus(),
@@ -179,7 +179,7 @@ impl Application for Lanch {
                 match self.suggestions.get(self.selected).unwrap().execute() {
                     Ok(()) => return window::close(),
                     Err(e) => {
-                        self.warn_msg.set(Some(format!(" Error: {}", e)));
+                        self.info_bar.set_msg(Some(format!(" Error: {}", e)));
                     }
                 }
             }
@@ -199,29 +199,6 @@ impl Application for Lanch {
 
         let suggestions = container(self.view_suggestions());
 
-        let warntxt = self.warn_msg.take();
-        //self.warn_msg.set(None);
-
-        let info_bar = if let Some(txt) = warntxt {
-            container(text(txt))
-                .width(Length::Fill)
-                .style(theme::Container::Custom(Box::new(
-                    ContainerBackgroundStyle::new(*COLOR_WARN),
-                )))
-        } else {
-            container(row![text(format!(
-                " Page: {} [{}-{}/{}]",
-                self.page,
-                SUGGESTIONS_PER_PAGE * self.page,
-                SUGGESTIONS_PER_PAGE * self.page + SUGGESTIONS_PER_PAGE.min(self.suggestions.len()),
-                self.suggestions.len(),
-            ))])
-            .width(Length::Fill)
-            .style(theme::Container::Custom(Box::new(
-                ContainerBackgroundStyle::new(*COLOR_INFO),
-            )))
-        };
-
         container(column![
             // search box
             input,
@@ -230,7 +207,7 @@ impl Application for Lanch {
             // suggestions
             suggestions.width(Length::Fill),
             vertical_space(Length::Fill),
-            info_bar,
+            self.info_bar.view(self),
         ])
         .into()
     }
