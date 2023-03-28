@@ -63,7 +63,7 @@ pub struct TimeSuggestion {
 }
 
 impl Suggestion for TimeSuggestion {
-    fn view(&self) -> Element<SuggestionMessage> {
+    fn view(&self) -> Element<LanchMessage> {
         let now = Local::now();
 
         let txt = if let Some(tz) = self.time_zone.get() {
@@ -85,7 +85,9 @@ impl Suggestion for TimeSuggestion {
         .into()
     }
 
-    fn execute(&self)  -> Result<(), Box<dyn std::error::Error>> { Ok(()) } // TODO: copy to clipboard
+    fn execute(&self) -> Result<Option<LanchMessage>, Box<dyn std::error::Error>> {
+        Ok(None)
+    } // TODO: copy to clipboard
 
     fn matches(&self, query: &str) -> MatchLevel {
         if query.contains("time") {
@@ -116,7 +118,7 @@ pub struct DateSuggestion {
 }
 
 impl Suggestion for DateSuggestion {
-    fn view(&self) -> Element<SuggestionMessage> {
+    fn view(&self) -> Element<LanchMessage> {
         let now = Local::now();
 
         let txt = if let Some(tz) = self.time_zone.get() {
@@ -142,7 +144,9 @@ impl Suggestion for DateSuggestion {
         .into()
     }
 
-    fn execute(&self)  -> Result<(), Box<dyn std::error::Error>> { Ok(()) } // TODO: copy to clipboard
+    fn execute(&self) -> Result<Option<LanchMessage>, Box<dyn std::error::Error>> {
+        Ok(None)
+    } // TODO: copy to clipboard
 
     fn matches(&self, query: &str) -> MatchLevel {
         if query.contains("date") {
@@ -163,5 +167,36 @@ impl Suggestion for DateSuggestion {
 impl Display for DateSuggestion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Date")
+    }
+}
+
+pub struct TimeDateModule {
+    time: Rc<TimeSuggestion>,
+    date: Rc<DateSuggestion>,
+}
+
+impl TimeDateModule {
+    pub fn new() -> Self {
+        Self {
+            time: Rc::new(TimeSuggestion::default()),
+            date: Rc::new(DateSuggestion::default()),
+        }
+    }
+}
+
+impl SuggestionModule for TimeDateModule {
+    fn get_matches(&mut self, query: &str, v: &mut VecDeque<Rc<dyn Suggestion>>) {
+        // Only exact matches for now, could be improved by trying to guess the locations etc.
+        match self.time.matches(query) {
+            MatchLevel::Exact => v.push_front(Rc::clone(&self.time) as Rc<dyn Suggestion>),
+            MatchLevel::Contained => v.push_back(Rc::clone(&self.time) as Rc<dyn Suggestion>),
+            MatchLevel::NoMatch => {}
+        }
+
+        match self.date.matches(query) {
+            MatchLevel::Exact => v.push_front(Rc::clone(&self.date) as Rc<dyn Suggestion>),
+            MatchLevel::Contained => v.push_back(Rc::clone(&self.date) as Rc<dyn Suggestion>),
+            MatchLevel::NoMatch => {}
+        }
     }
 }

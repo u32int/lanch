@@ -28,9 +28,9 @@ impl ProgramSuggestion {
 }
 
 impl Suggestion for ProgramSuggestion {
-    fn view(&self) -> Element<SuggestionMessage> {
+    fn view(&self) -> Element<LanchMessage> {
         if let Some(path) = &self.icon {
-            let img: Element<SuggestionMessage> = match path.extension() {
+            let img: Element<LanchMessage> = match path.extension() {
                 Some(s) => match s.to_str() {
                     Some("png") | Some("jpg") => image(path).width(20).height(20).into(),
                     Some("svg") => svg::Svg::from_path(path).width(20).height(20).into(),
@@ -50,15 +50,15 @@ impl Suggestion for ProgramSuggestion {
         }
     }
 
-    fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
+    fn execute(&self) -> Result<Option<LanchMessage>, Box<dyn std::error::Error>> {
         let mut exec = self.exec.split_whitespace();
         let mut cmd = Command::new(exec.next().unwrap());
-        // TODO: this causes some problems with certain args, as they are meant for shells. (ex. "%u")
-        //exec.for_each(|arg| {
-        //    cmd.arg(arg);
-        //});
+        // TODO: stopgap for now - this causes some problems with certain args, as they are meant for shells. (ex. "%u")
+        exec.filter(|arg| !arg.starts_with('%')).for_each(|arg| {
+            cmd.arg(arg);
+        });
         match cmd.spawn() {
-            Ok(_) => Ok(()),
+            Ok(_) => Ok(None),
             Err(e) => Err(Box::new(e)),
         }
     }
@@ -77,5 +77,26 @@ impl Suggestion for ProgramSuggestion {
 impl Display for ProgramSuggestion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Program")
+    }
+}
+
+pub struct ProgramModule {
+    cache: Vec<Rc<ProgramSuggestion>>,
+}
+
+impl ProgramModule {
+    pub fn new(cache: Vec<Rc<ProgramSuggestion>>) -> Self {
+        Self { cache }
+    }
+}
+
+impl SuggestionModule for ProgramModule {
+    fn get_matches(&mut self, query: &str, v: &mut VecDeque<Rc<dyn Suggestion>>) {
+        // TODO: we can do better than this efficiency wise
+        self.cache.iter().for_each(|p| match p.matches(query) {
+            MatchLevel::Exact => v.push_front(Rc::clone(&p) as Rc<dyn Suggestion>),
+            MatchLevel::Contained => v.push_back(Rc::clone(&p) as Rc<dyn Suggestion>),
+            MatchLevel::NoMatch => {}
+        })
     }
 }

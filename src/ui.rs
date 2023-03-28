@@ -1,5 +1,6 @@
 use iced::widget::{
-    column, container, horizontal_rule, horizontal_space, row, text, text_input, vertical_space,
+    column, container, horizontal_rule, horizontal_space, row, scrollable, text, text_input,
+    vertical_space,
 };
 use iced::{
     alignment, executor, keyboard, subscription, theme, window, Application, Background, Color,
@@ -9,8 +10,8 @@ use iced::{
 use std::collections::VecDeque;
 use std::rc::Rc;
 
-mod settings;
 mod infobar;
+mod settings;
 
 use super::cache;
 use crate::suggestion::*;
@@ -33,13 +34,11 @@ pub struct Lanch {
     // initialized from flags, contain the default values for window settings etc.
     options: LanchOptions,
 
-    // cached programs to limit potentially hundreds of fs calls to 1 cache.
-    // TODO: refresh periodically
-    program_cache: Vec<Rc<dyn Suggestion>>,
-    executable_cache: Vec<Rc<dyn Suggestion>>,
+    // The current display layout of the application
+    layout: Layout,
 
     // loaded modules providing extra suggestion functionality
-    modules: Vec<Rc<dyn Suggestion>>,
+    modules: Vec<Box<dyn SuggestionModule>>,
 
     // the current query in the text box
     query: String,
@@ -56,7 +55,7 @@ pub struct Lanch {
     // application theme
     theme: Theme,
 
-    // the bottom info bar 
+    // the bottom info bar
     info_bar: infobar::InfoBar,
 }
 
@@ -67,13 +66,20 @@ pub enum Direction {
     Down,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Layout {
+    Default,
+    License,
+    Help,
+}
+
 #[derive(Debug, Clone)]
 pub enum LanchMessage {
     QueryChanged(String),
     NavigateList(Direction),
     ExecuteSelected,
     Escape,
-    SuggestionMessage(SuggestionMessage),
+    SwitchLayout(Layout),
 }
 
 impl Application for Lanch {
@@ -86,23 +92,28 @@ impl Application for Lanch {
         (
             Lanch {
                 options: flags.options,
-                program_cache: flags
-                    .cache
-                    .programs
-                    .into_iter()
-                    .map(|elem| Rc::new(elem) as Rc<dyn Suggestion>)
-                    .collect(),
-                executable_cache: flags
-                    .cache
-                    .executables
-                    .into_iter()
-                    .map(|elem| Rc::new(elem) as Rc<dyn Suggestion>)
-                    .collect(),
                 modules: vec![
-                    Rc::new(timedate::TimeSuggestion::default()),
-                    Rc::new(timedate::DateSuggestion::default()),
-                    Rc::new(help::HelpSuggestion),
+                    Box::new(builtin::BuiltInModule::new()),
+                    Box::new(command::CommandModule),
+                    Box::new(timedate::TimeDateModule::new()),
+                    Box::new(program::ProgramModule::new(
+                        flags
+                            .cache
+                            .programs
+                            .into_iter()
+                            .map(|x| Rc::new(x))
+                            .collect(),
+                    )),
+                    Box::new(executable::ExecutableModule::new(
+                        flags
+                            .cache
+                            .executables
+                            .into_iter()
+                            .map(|x| Rc::new(x))
+                            .collect(),
+                    )),
                 ], // temporary, will load from config eventually
+                layout: Layout::Default,
                 query: String::new(),
                 suggestions: VecDeque::new(),
                 selected: 0,
@@ -176,42 +187,83 @@ impl Application for Lanch {
                 }
             },
             LanchMessage::ExecuteSelected => {
-                if let Some(sel) = self.suggestions.get(self.selected) {
+                if let Some(sel) = self
+                    .suggestions
+                    .get(self.selected + self.page * SUGGESTIONS_PER_PAGE)
+                {
                     match sel.execute() {
-                        Ok(()) => return window::close(),
+                        Ok(Some(msg)) => return self.update(msg),
+                        Ok(None) => return window::close(),
                         Err(e) => {
                             self.info_bar.set_msg(Some(format!(" Error: {}", e)));
                         }
                     }
                 }
             }
-            LanchMessage::Escape => {
-                return window::close();
+            LanchMessage::Escape => match self.layout {
+                Layout::Help | Layout::License => {
+                    return Command::batch(vec![
+                        self.update(LanchMessage::SwitchLayout(Layout::Default)),
+                        text_input::focus(QUERY_INPUT_ID.clone()),
+                    ])
+                }
+                Layout::Default => return window::close(),
+            },
+            LanchMessage::SwitchLayout(layout) => {
+                self.layout = layout;
+
+                match layout {
+                    Layout::Default => {
+                        return window::resize(
+                            self.options.window_size.0,
+                            self.options.window_size.1,
+                        )
+                    }
+                    Layout::License => return window::resize(700, 450),
+                    Layout::Help => unreachable!(),
+                }
             }
-            _ => todo!(),
         }
 
         Command::none()
     }
 
     fn view(&self) -> Element<Self::Message> {
-        let input = text_input("Search...", &self.query, LanchMessage::QueryChanged)
-            .id(QUERY_INPUT_ID.clone())
-            .width(Length::Fill);
+        match self.layout {
+            // The default one column suggestion list layout
+            Layout::Default => {
+                let input = text_input("Search...", &self.query, LanchMessage::QueryChanged)
+                    .id(QUERY_INPUT_ID.clone())
+                    .width(Length::Fill);
 
-        let suggestions = container(self.view_suggestions());
+                let suggestions = container(self.view_suggestions());
 
-        container(column![
-            // search box
-            input,
-            horizontal_rule(3),
-            vertical_space(Length::Fixed(5f32)),
-            // suggestions
-            suggestions.width(Length::Fill),
-            vertical_space(Length::Fill),
-            self.info_bar.view(self),
-        ])
-        .into()
+                container(column![
+                    // search box
+                    input,
+                    horizontal_rule(3),
+                    vertical_space(Length::Fixed(5f32)),
+                    // suggestions
+                    suggestions.width(Length::Fill),
+                    vertical_space(Length::Fill),
+                    self.info_bar.view(self),
+                ])
+                .into()
+            }
+            // License text layout
+            Layout::License => scrollable(
+                column![include_str!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/LICENSE"
+                ))]
+                .width(Length::Fill),
+            )
+            .into(),
+            // Help menu
+            Layout::Help => {
+                todo!()
+            }
+        }
     }
 
     fn subscription(&self) -> iced::Subscription<Self::Message> {
@@ -239,35 +291,9 @@ impl Lanch {
         }
 
         let trimmed_query = self.query.trim();
-        let mut match_counter: usize = 0;
 
-        let mut add_suggestions = |vec: &Vec<Rc<dyn Suggestion>>| {
-            for elem in vec {
-                match elem.matches(trimmed_query) {
-                    MatchLevel::Contained => self.suggestions.push_back(Rc::clone(elem)),
-                    MatchLevel::Exact => self.suggestions.push_front(Rc::clone(elem)),
-                    MatchLevel::NoMatch => continue,
-                }
-
-                match_counter += 1;
-            }
-        };
-
-        add_suggestions(&self.modules);
-        add_suggestions(&self.program_cache);
-        add_suggestions(&self.executable_cache);
-
-        // CommandSuggestion - just run the provided query as a command
-        if let Some(cmd) = trimmed_query.strip_prefix('!') {
-            self.suggestions
-                .push_front(Rc::new(command::CommandSuggestion::with_cmd(
-                    cmd,
-                )))
-        } else {
-            self.suggestions
-                .push_back(Rc::new(command::CommandSuggestion::with_cmd(
-                    trimmed_query,
-                )))
+        for module in &mut self.modules {
+            module.get_matches(trimmed_query, &mut self.suggestions)
         }
     }
 
@@ -298,13 +324,13 @@ impl Lanch {
                 .enumerate()
                 .map(|(i, sg)| {
                     let elem = if i == self.selected {
-                        container(sg.view().map(LanchMessage::SuggestionMessage))
+                        container(sg.view())
                             .style(theme::Container::Custom(Box::new(
                                 ContainerBackgroundStyle::new(Color::from([0.3, 0.3, 0.3])),
                             )))
                             .into()
                     } else {
-                        sg.view().map(LanchMessage::SuggestionMessage)
+                        sg.view()
                     };
 
                     row![
