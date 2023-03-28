@@ -176,10 +176,12 @@ impl Application for Lanch {
                 }
             },
             LanchMessage::ExecuteSelected => {
-                match self.suggestions.get(self.selected).unwrap().execute() {
-                    Ok(()) => return window::close(),
-                    Err(e) => {
-                        self.info_bar.set_msg(Some(format!(" Error: {}", e)));
+                if let Some(sel) = self.suggestions.get(self.selected) {
+                    match sel.execute() {
+                        Ok(()) => return window::close(),
+                        Err(e) => {
+                            self.info_bar.set_msg(Some(format!(" Error: {}", e)));
+                        }
                     }
                 }
             }
