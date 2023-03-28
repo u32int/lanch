@@ -70,8 +70,8 @@ impl SuggestionModule for ExecutableModule {
     fn get_matches(&mut self, query: &str, v: &mut VecDeque<Rc<dyn Suggestion>>) {
         // TODO: we can do better than this efficiency wise
         self.cache.iter().for_each(|p| match p.matches(query) {
-            MatchLevel::Exact => v.push_front(Rc::clone(&p) as Rc<dyn Suggestion>),
-            MatchLevel::Contained => v.push_back(Rc::clone(&p) as Rc<dyn Suggestion>),
+            MatchLevel::Exact => v.push_front(Rc::clone(p) as Rc<dyn Suggestion>),
+            MatchLevel::Contained => v.push_back(Rc::clone(p) as Rc<dyn Suggestion>),
             MatchLevel::NoMatch => {}
         })
     }

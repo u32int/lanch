@@ -101,7 +101,7 @@ impl Application for Lanch {
                             .cache
                             .programs
                             .into_iter()
-                            .map(|x| Rc::new(x))
+                            .map(Rc::new)
                             .collect(),
                     )),
                     Box::new(executable::ExecutableModule::new(
@@ -109,7 +109,7 @@ impl Application for Lanch {
                             .cache
                             .executables
                             .into_iter()
-                            .map(|x| Rc::new(x))
+                            .map(Rc::new)
                             .collect(),
                     )),
                 ], // temporary, will load from config eventually
