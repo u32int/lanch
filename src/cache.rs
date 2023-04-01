@@ -1,9 +1,11 @@
-use super::suggestion::{executable::ExecutableSuggestion, program::ProgramSuggestion};
+use super::suggestion::executable::{ExecutableSuggestion, ProgramSuggestion};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs::{self, File};
 use std::io::prelude::*;
 use std::path::PathBuf;
+
+use std::rc::Rc;
 
 lazy_static::lazy_static! {
     static ref CACHE_FILE_PATH: PathBuf = PathBuf::from(format!("{}/.cache/lanch/cachefile", env::var("HOME").unwrap()));
@@ -16,6 +18,23 @@ pub struct LanchCache {
 
     // files in $PATH
     pub executables: Vec<ExecutableSuggestion>,
+}
+
+pub struct LanchCacheRc {
+    // Programs are applications found in /usr/share/applications
+    pub programs: Vec<Rc<ProgramSuggestion>>,
+
+    // files in $PATH
+    pub executables: Vec<Rc<ExecutableSuggestion>>,
+}
+
+impl From<LanchCache> for LanchCacheRc {
+    fn from(value: LanchCache) -> Self {
+        Self {
+            programs: value.programs.into_iter().map(Rc::new).collect(),
+            executables: value.executables.into_iter().map(Rc::new).collect(),
+        }
+    }
 }
 
 impl LanchCache {
@@ -94,7 +113,10 @@ impl LanchCache {
 
     // Generates new cache and writes it to disk
     pub fn new(icon_theme: Option<&str>) -> Result<Self, Box<dyn std::error::Error>> {
-        println!("[CACHE] generating new cache at {:?}", CACHE_FILE_PATH.clone());
+        println!(
+            "[CACHE] generating new cache at {:?}",
+            CACHE_FILE_PATH.clone()
+        );
 
         let cache_dir = CACHE_FILE_PATH.parent().unwrap();
         if !cache_dir.exists() {
@@ -107,13 +129,12 @@ impl LanchCache {
             executables: Self::generate_executables()?,
         };
 
-        let mut cache_file = match File::open(CACHE_FILE_PATH.clone()) {
-            Ok(f) => f,
-            Err(_) => File::create(CACHE_FILE_PATH.clone()).unwrap(),
-        };
+        let mut cache_file = File::create(CACHE_FILE_PATH.clone()).unwrap();
 
         let encoded: Vec<u8> = bincode::serialize(&cache).unwrap();
         cache_file.write_all(&encoded).unwrap();
+
+        println!("[CACHE] done.");
 
         Ok(cache)
     }

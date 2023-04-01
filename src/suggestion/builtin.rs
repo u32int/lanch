@@ -46,6 +46,10 @@ impl BuiltInModule {
         Self {
             cmds: vec![
                 Rc::new(BuiltInSuggestion {
+                    name: String::from("refresh cache"),
+                    execute_fn: || Ok(Some(LanchMessage::RefreshCache)),
+                }),
+                Rc::new(BuiltInSuggestion {
                     name: String::from("license"),
                     execute_fn: || Ok(Some(LanchMessage::SwitchLayout(crate::ui::Layout::License))),
                 }),

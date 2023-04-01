@@ -22,12 +22,12 @@ pub trait Suggestion: Display + Debug {
     fn matches(&self, query: &str) -> MatchLevel;
 }
 
+/// Suggestion modules add matching modules to the suggestion list based on the passed query
 pub trait SuggestionModule {
     fn get_matches(&mut self, query: &str, v: &mut VecDeque<Rc<dyn Suggestion>>);
 }
 
 pub mod executable;
-pub mod program;
 pub mod timedate;
 pub mod command;
 pub mod builtin;

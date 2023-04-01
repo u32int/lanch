@@ -13,12 +13,11 @@ use std::rc::Rc;
 mod infobar;
 mod settings;
 
-use super::cache;
 use crate::suggestion::*;
 use settings::*;
 
-pub fn init(cache: cache::LanchCache) -> iced::Result {
-    Lanch::run(settings::settings(cache))
+pub fn init() -> iced::Result {
+    Lanch::run(settings::settings())
 }
 
 lazy_static::lazy_static! {
@@ -36,6 +35,9 @@ pub struct Lanch {
 
     // The current display layout of the application
     layout: Layout,
+
+    // this is a little bit of a workaround for now
+    executable_module: executable::ExecutableModule,
 
     // loaded modules providing extra suggestion functionality
     modules: Vec<Box<dyn SuggestionModule>>,
@@ -80,6 +82,7 @@ pub enum LanchMessage {
     ExecuteSelected,
     Escape,
     SwitchLayout(Layout),
+    RefreshCache,
 }
 
 impl Application for Lanch {
@@ -92,27 +95,12 @@ impl Application for Lanch {
         (
             Lanch {
                 options: flags.options,
+                executable_module: executable::ExecutableModule::new(None),
                 modules: vec![
-                    Box::new(builtin::BuiltInModule::new()),
                     Box::new(command::CommandModule),
                     Box::new(timedate::TimeDateModule::new()),
-                    Box::new(program::ProgramModule::new(
-                        flags
-                            .cache
-                            .programs
-                            .into_iter()
-                            .map(Rc::new)
-                            .collect(),
-                    )),
-                    Box::new(executable::ExecutableModule::new(
-                        flags
-                            .cache
-                            .executables
-                            .into_iter()
-                            .map(Rc::new)
-                            .collect(),
-                    )),
-                ], // temporary, will load from config eventually
+                    Box::new(builtin::BuiltInModule::new()),
+                ], 
                 layout: Layout::Default,
                 query: String::new(),
                 suggestions: VecDeque::new(),
@@ -223,6 +211,11 @@ impl Application for Lanch {
                     Layout::Help => unreachable!(),
                 }
             }
+            LanchMessage::RefreshCache => {
+                self.executable_module.refresh_cache(None);
+                self.info_bar.set_color(Some(Color::from([0.04, 0.55, 0.35])));
+                self.info_bar.set_msg(Some(String::from("cache: done")));
+            }
         }
 
         Command::none()
@@ -292,8 +285,9 @@ impl Lanch {
 
         let trimmed_query = self.query.trim();
 
+        self.executable_module.get_matches(trimmed_query, &mut self.suggestions);
         for module in &mut self.modules {
-            module.get_matches(trimmed_query, &mut self.suggestions)
+            module.get_matches(trimmed_query, &mut self.suggestions);
         }
     }
 
